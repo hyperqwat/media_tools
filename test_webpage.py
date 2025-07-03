@@ -7,23 +7,27 @@ import time
 TEST = 0
 MAX_RETRY = 3
 RETRY_WAIT_TIME = 10
-INPUT_JSON = "7991.json"
+INPUT_JSON = "1012.json"
 
 def check_google_fail(browser) :
     g_page = browser.new_page()
     try:
         resp = g_page.goto("https://google.com", wait_until="domcontentloaded", timeout=15000)
-        return 0
+        return_value = 0
     except Exception as e:
-        return 1
+        return_value = 1
+    g_page.close()
+    return return_value
     
 def check_main_site(site, browser) :
     g_page = browser.new_page()
     try:
         resp = g_page.goto("https://" + site, wait_until="domcontentloaded", timeout=15000)
-        return 0
+        return_value = 0
     except Exception as e:
-        return 1
+        return_value = 1
+    g_page.close()
+    return return_value
 
 def get_main_site(string) :
     return_string = string[string.find("//")+2:] + "/"
@@ -108,6 +112,7 @@ with sync_playwright() as p:
                 retry_count = retry_count + 1
                 flag = 0
                 er = e
+            page.close()
         result.append(flag)
         error.append(er)
         with open("output/" + INPUT_JSON[:-5] + ".csv", "a", encoding="utf-8") as text_file:
