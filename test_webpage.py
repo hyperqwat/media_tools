@@ -2,12 +2,15 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 import json
 import time
+import os
 
 # 0 for json input
-TEST = 0
+TEST = 1
 MAX_RETRY = 3
 RETRY_WAIT_TIME = 10
 INPUT_JSON = "1012.json"
+OUTPUT_PATH = "output/test/"
+DIR_MAX_FILES = 300
 
 def check_google_fail(browser) :
     g_page = browser.new_page()
@@ -58,13 +61,15 @@ if TEST != 0 :
     ]
 
 done_urls = set()
-try:
-    with open("temp/" + INPUT_JSON[:-5] + ".csv", "r", encoding="utf-8") as text_file:
-        for line in text_file:
-            print(line)
-            done_urls.add(line[:-1])
-except:
-    pass
+
+if (TEST == 0) :
+    try:
+        with open("temp/" + INPUT_JSON[:-5] + ".csv", "r", encoding="utf-8") as text_file:
+            for line in text_file:
+                print(line)
+                done_urls.add(line[:-1])
+    except:
+        pass
 
 result = []
 error = []
@@ -72,6 +77,8 @@ error = []
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
 
+    file_counter = 0
+    folder_counter = 0
     for url in urls:
         if url in done_urls:
             print("Already done: " + url)
@@ -87,6 +94,23 @@ with sync_playwright() as p:
             
                 # Wait until the final navigation settles
                 final_url = page.wait_for_url("**", timeout=15000)
+                print("FINAL URL: " + str(final_url))
+
+                #SAVE CONTENT
+                folder_path = OUTPUT_PATH + str(folder_counter) + "/"
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path)
+
+                save_path = folder_path + str(file_counter) + ".csv"
+                with open(save_path, "w", encoding="utf-8") as output_html:
+                    output_html.write(page.content())
+
+                file_counter = file_counter + 1 
+                if file_counter >= DIR_MAX_FILES:
+                    folder_counter = folder_counter + 1
+                    file_counter = 0
+
+                #CHECK AVAILABILITY
                 if not page.locator("h1").is_visible() :
                     print(f"{url} — Content MISSING")
                     flag = 0
@@ -115,14 +139,21 @@ with sync_playwright() as p:
             page.close()
         result.append(flag)
         error.append(er)
+
+        # SAVE OUTPUT
         with open("output/" + INPUT_JSON[:-5] + ".csv", "a", encoding="utf-8") as text_file:
             text_file.write(str(flag)+";"+str(er=="")+";"+ url+"\n")
 
         with open("temp/" + INPUT_JSON[:-5] + ".csv", "a", encoding="utf-8") as text_file:
             text_file.write(url+"\n")
+        
 
 
     browser.close()
     print(result)
     print(error)
+
+    #print(data["articles"][-1]["body"][0]["Item1"]["title"]["raw"])
+    #print(len(data["articles"]))
+    #print(len(urls))
 
