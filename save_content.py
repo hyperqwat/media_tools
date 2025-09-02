@@ -7,9 +7,20 @@ import os
 import time
 import multiprocessing
 import random
+import configparser
 
-INPUT_FOLDER_PATTERN = '../PublisherMetaJSONExporter_2025_07_31/europejson3/**/*.json'
+config = configparser.ConfigParser()
+config.read('config.ini')
+INPUT_FOLDER_PATTERN = config['save_content']['INPUT_FOLDER_PATTERN']
+OUTPUT_FOLDER = config['save_content']['OUTPUT_FOLDER']
+MAX_RETRY = config.getint('save_content', 'MAX_RETRY')
+RETRY_WAIT_TIME = config.getint('save_content', 'RETRY_WAIT_TIME')
+DIR_MAX_FILES = config.getint('save_content', 'DIR_MAX_FILES')
+cores = config.getint('save_content', 'CORES')
 
+def remove_weird_suffix(url):
+    url = url.removesuffix("/&cc=cikkszerzonek@mail.index.nemspa_m.hu")
+    return url
 
 def read_input_urls(json_list, url_list) :
     for json_file in json_list:
@@ -18,7 +29,7 @@ def read_input_urls(json_list, url_list) :
         
         try :
             urls = data["articleIndex"].keys()
-            urls = ["https://" + string for string in urls ]
+            urls = ["https://" + remove_weird_suffix(string) for string in urls ]
             url_list.extend(urls)
         except :
             write_problematic_file(json_file)
@@ -92,10 +103,6 @@ def chunkify(lst,n):
     return [ lst[i::n] for i in range(n) ]
 
 def save_pages(to_read_urls, core, done_urls) :
-    OUTPUT_FOLDER = 'output/raw/'
-    MAX_RETRY = 1
-    RETRY_WAIT_TIME = 1
-    DIR_MAX_FILES = 300
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -138,6 +145,12 @@ def save_pages(to_read_urls, core, done_urls) :
                     with open(save_path, "w", encoding="utf-8") as output_html:
                         output_html.write(page.content())
 
+                    with open("output/results" + str(core) + ".csv", "a", encoding="utf-8") as text_file:
+                        text_file.write(str(file_counter)+";"+str(folder_counter)+";"+ url+"\n")
+
+                    with open("output/raw_done" + str(core) + ".csv", "a", encoding="utf-8") as text_file:
+                        text_file.write(url+"\n")
+
                     file_counter = file_counter + 1 
                     if file_counter >= DIR_MAX_FILES:
                         folder_counter = folder_counter + 1
@@ -169,16 +182,11 @@ def save_pages(to_read_urls, core, done_urls) :
                 page.close()
 
 
-            # SAVE OUTPUT
-            if (fail == 0):
-                with open("output/results" + str(core) + ".csv", "a", encoding="utf-8") as text_file:
-                    text_file.write(str(file_counter)+";"+str(folder_counter)+";"+ url+"\n")
-
-                with open("output/raw_done" + str(core) + ".csv", "a", encoding="utf-8") as text_file:
-                    text_file.write(url+"\n")
 
 
 if __name__ == '__main__' :
+
+
     files = glob.glob(INPUT_FOLDER_PATTERN, recursive=True)
 
     done_urls = set()
@@ -187,7 +195,6 @@ if __name__ == '__main__' :
     read_done_urls(done_urls)
     read_done_urls_cores(done_urls)
 
-    cores = 6
     print(str(len(to_read_urls))+"\n") 
     to_read_urls = list(dict.fromkeys(to_read_urls))
     print(str(len(to_read_urls))+"\n") 
